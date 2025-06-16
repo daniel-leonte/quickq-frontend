@@ -1,2 +1,7 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
 - This project is a React + TypeScript + Vite + TailwindCSS web app.
 - Users can browse a list of tech jobs and launch an interview simulation for any selected job.
