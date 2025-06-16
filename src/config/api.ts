@@ -5,6 +5,7 @@ export const API_CONFIG = {
   BASE_URL: ENV_CONFIG.API_BASE_URL,
   ENDPOINTS: {
     JOBS: '/jobs',
+    QUESTIONS: '/questions',
     // Add other endpoints here as you create them
     // INTERVIEWS: '/interviews',
     // USER_PROFILE: '/user/profile',

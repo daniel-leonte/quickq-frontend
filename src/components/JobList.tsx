@@ -3,7 +3,11 @@ import type { Job } from '../types/job';
 import { JobCard } from './JobCard';
 import { jobService, type JobSearchParams } from '../services/jobService';
 
-export function JobList() {
+interface JobListProps {
+  onInterviewClick?: (job: Job) => void;
+}
+
+export function JobList({ onInterviewClick }: JobListProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [jobTypeFilter, setJobTypeFilter] = useState('all');
   const [levelFilter, setLevelFilter] = useState('all');
@@ -77,9 +81,9 @@ export function JobList() {
   }, [jobs, jobTypeFilter]);
 
   const handleInterviewClick = (job: Job) => {
-    console.log('Starting interview simulation for:', job.title, 'at', job.company);
-    // TODO: Implement interview simulation navigation
-    alert(`Interview simulation for ${job.title} at ${job.company} would start here!`);
+    if (onInterviewClick) {
+      onInterviewClick(job);
+    }
   };
 
   // Get unique job types and levels from current jobs for filter options

@@ -1,4 +1,4 @@
-import type { Job } from '../types/job';
+import type { Job, InterviewRequest, InterviewResponse } from '../types/job';
 import { API_CONFIG, buildApiUrl } from '../config/api';
 
 export interface JobSearchParams {
@@ -41,4 +41,37 @@ export const jobService = {
       throw error;
     }
   },
+
+  async getInterviewQuestions(job: Job): Promise<InterviewResponse> {
+    try {
+      const requestData: InterviewRequest = {
+        job: {
+          title: job.title,
+          description: job.description,
+          skills: job.skills
+        }
+      };
+
+      const response = await fetch(buildApiUrl(API_CONFIG.ENDPOINTS.QUESTIONS), {
+        method: 'POST',
+        headers: API_CONFIG.DEFAULT_HEADERS,
+        body: JSON.stringify(requestData),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.success && data.questions && Array.isArray(data.questions)) {
+        return data as InterviewResponse;
+      } else {
+        throw new Error('Invalid response format');
+      }
+    } catch (error) {
+      console.error('Error fetching interview questions:', error);
+      throw error;
+    }
+  }
 }; 
