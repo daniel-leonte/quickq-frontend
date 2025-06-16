@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { Job } from '../types/job';
 
 interface JobCardProps {
@@ -6,6 +7,8 @@ interface JobCardProps {
 }
 
 export function JobCard({ job, onInterviewClick }: JobCardProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
   const getJobTypeColor = (jobType: string) => {
     switch (jobType.toLowerCase()) {
       case 'remote':
@@ -40,12 +43,74 @@ export function JobCard({ job, onInterviewClick }: JobCardProps) {
     });
   };
 
+  const parseMarkdownToJSX = (text: string) => {
+    // Split by double newlines to create paragraphs
+    const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim());
+    
+    return paragraphs.map((paragraph, pIndex) => {
+      const lines = paragraph.split('\n');
+      const elements: React.ReactNode[] = [];
+      let currentListItems: string[] = [];
+      
+      const flushListItems = () => {
+        if (currentListItems.length > 0) {
+          elements.push(
+            <ul key={`list-${pIndex}-${elements.length}`} className="list-disc list-inside space-y-1 mt-2 mb-2">
+              {currentListItems.map((item, idx) => (
+                <li key={idx} className="text-sm text-gray-700">{item}</li>
+              ))}
+            </ul>
+          );
+          currentListItems = [];
+        }
+      };
+      
+      lines.forEach((line, lIndex) => {
+        const trimmedLine = line.trim();
+        if (!trimmedLine) return;
+        
+        // Headers
+        if (trimmedLine.startsWith('## ')) {
+          flushListItems();
+          elements.push(
+            <h3 key={`${pIndex}-${lIndex}`} className="text-base font-semibold text-gray-900 mt-4 mb-2 first:mt-0">
+              {trimmedLine.replace('## ', '')}
+            </h3>
+          );
+        }
+        // Bullet points
+        else if (trimmedLine.startsWith('* ') || trimmedLine.startsWith('- ')) {
+          const content = trimmedLine.replace(/^[*-] /, '');
+          currentListItems.push(content);
+        }
+        // Regular text
+        else {
+          flushListItems();
+          elements.push(
+            <p key={`${pIndex}-${lIndex}`} className="text-sm text-gray-700 leading-relaxed mb-2">
+              {trimmedLine}
+            </p>
+          );
+        }
+      });
+      
+      flushListItems(); // Flush any remaining list items
+      
+      return <div key={pIndex}>{elements}</div>;
+    });
+  };
+
   const truncateDescription = (description: string, maxLength: number = 200) => {
     const plainText = description.replace(/[#*-]/g, '').replace(/\n+/g, ' ').trim();
     return plainText.length > maxLength 
       ? plainText.substring(0, maxLength) + '...' 
       : plainText;
   };
+
+  const shouldShowExpandButton = job.description.length > 300;
+  const descriptionContent = isExpanded 
+    ? parseMarkdownToJSX(job.description)
+    : truncateDescription(job.description);
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 p-6">
@@ -71,9 +136,30 @@ export function JobCard({ job, onInterviewClick }: JobCardProps) {
         </span>
       </div>
 
-      <p className="text-gray-700 text-sm mb-4 leading-relaxed">
-        {truncateDescription(job.description)}
-      </p>
+      <div className="mb-4">
+        <div className={`transition-all duration-300 ease-in-out ${isExpanded ? 'max-h-none' : 'max-h-20 overflow-hidden'}`}>
+          {isExpanded ? (
+            <div className="prose prose-sm max-w-none">
+              {descriptionContent}
+            </div>
+          ) : (
+            <p className="text-gray-700 text-sm leading-relaxed">
+              {descriptionContent}
+            </p>
+          )}
+        </div>
+        
+        {shouldShowExpandButton && (
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="text-blue-600 hover:text-blue-800 text-sm font-medium mt-2 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded"
+            aria-expanded={isExpanded}
+            aria-label={isExpanded ? 'Show less of job description' : 'Show full job description'}
+          >
+            {isExpanded ? '← Show less' : 'Read more →'}
+          </button>
+        )}
+      </div>
 
       <div className="mb-4">
         <h4 className="text-sm font-medium text-gray-900 mb-2">Required Skills:</h4>
