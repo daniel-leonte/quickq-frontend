@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import type { Job, ChatMessage, InterviewResponse } from '../types/job';
+import type { Job, ChatMessage, InterviewResponse, QuestionAnswer, FeedbackRequest } from '../types/job';
 import { jobService } from '../services/jobService';
 
 interface InterviewChatProps {
@@ -12,9 +12,13 @@ export function InterviewChat({ job, onBack }: InterviewChatProps) {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [userResponse, setUserResponse] = useState('');
   const [questions, setQuestions] = useState<string[]>([]);
+  const [questionAnswers, setQuestionAnswers] = useState<QuestionAnswer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingFeedback, setIsLoadingFeedback] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isComplete, setIsComplete] = useState(false);
+  const [showingFeedback, setShowingFeedback] = useState(false);
+  const [overallFeedback, setOverallFeedback] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -24,6 +28,15 @@ export function InterviewChat({ job, onBack }: InterviewChatProps) {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    if (overallFeedback) {
+      // Small delay to ensure the feedback content is rendered before scrolling
+      setTimeout(() => {
+        scrollToBottom();
+      }, 100);
+    }
+  }, [overallFeedback]);
 
   useEffect(() => {
     const fetchQuestions = async () => {
@@ -52,7 +65,7 @@ export function InterviewChat({ job, onBack }: InterviewChatProps) {
     fetchQuestions();
   }, [job]);
 
-  const handleSubmitResponse = () => {
+  const handleSubmitResponse = async () => {
     if (!userResponse.trim()) return;
 
     // Add user response to chat
@@ -63,11 +76,61 @@ export function InterviewChat({ job, onBack }: InterviewChatProps) {
     };
 
     setMessages(prev => [...prev, responseMessage]);
-    setUserResponse('');
 
-    // Move to next question or complete interview
+    // Create question-answer pair
+    const questionAnswer: QuestionAnswer = {
+      question: questions[currentQuestionIndex],
+      answer: userResponse.trim()
+    };
+
+    const updatedQuestionAnswers = [...questionAnswers, questionAnswer];
+    setQuestionAnswers(updatedQuestionAnswers);
+
+    setUserResponse('');
+    setIsLoadingFeedback(true);
+    setShowingFeedback(true);
+
+    try {
+      // Get feedback for this answer
+      const feedbackRequest: FeedbackRequest = {
+        job: {
+          title: job.title,
+          description: job.description,
+          skills: job.skills
+        },
+        questions: [questionAnswer] // Send only current question-answer pair
+      };
+
+      const feedbackResponse = await jobService.getFeedback(feedbackRequest);
+      
+      // Add feedback message to chat
+      const feedbackMessage: ChatMessage = {
+        id: `feedback-${currentQuestionIndex}`,
+        content: feedbackResponse.feedback,
+        type: 'feedback'
+      };
+
+      setMessages(prev => [...prev, feedbackMessage]);
+    } catch (err) {
+      console.error('Error getting feedback:', err);
+      // Add error message instead of feedback
+      const errorMessage: ChatMessage = {
+        id: `feedback-error-${currentQuestionIndex}`,
+        content: 'Sorry, we could not generate feedback for this answer. Please continue to the next question.',
+        type: 'feedback'
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoadingFeedback(false);
+    }
+  };
+
+  const handleNextQuestion = async () => {
     const nextQuestionIndex = currentQuestionIndex + 1;
+    
     if (nextQuestionIndex < questions.length) {
+      // Move to next question
+      setShowingFeedback(false);
       setTimeout(() => {
         const nextQuestion: ChatMessage = {
           id: `question-${nextQuestionIndex}`,
@@ -78,7 +141,29 @@ export function InterviewChat({ job, onBack }: InterviewChatProps) {
         setCurrentQuestionIndex(nextQuestionIndex);
       }, 500);
     } else {
-      setIsComplete(true);
+      // All questions completed - get overall feedback
+      setIsLoadingFeedback(true);
+      setShowingFeedback(false);
+      
+      try {
+        const overallFeedbackRequest: FeedbackRequest = {
+          job: {
+            title: job.title,
+            description: job.description,
+            skills: job.skills
+          },
+          questions: questionAnswers // Send all question-answer pairs
+        };
+
+        const overallFeedbackResponse = await jobService.getFeedback(overallFeedbackRequest);
+        setOverallFeedback(overallFeedbackResponse.feedback);
+      } catch (err) {
+        console.error('Error getting overall feedback:', err);
+        setOverallFeedback('We encountered an issue generating your overall interview feedback. Thank you for completing the interview!');
+      } finally {
+        setIsLoadingFeedback(false);
+        setIsComplete(true);
+      }
     }
   };
 
@@ -199,13 +284,38 @@ export function InterviewChat({ job, onBack }: InterviewChatProps) {
               className={`max-w-xs md:max-w-md lg:max-w-lg px-4 py-2 rounded-lg ${
                 message.type === 'answer'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-white text-gray-800 shadow-sm'
+                  : message.type === 'feedback'
+                  ? 'bg-yellow-50 text-gray-800 shadow-sm border border-yellow-200'
+                  : 'bg-white text-gray-800 shadow-sm border-l-4 border-blue-500'
               }`}
             >
+              {message.type === 'feedback' && (
+                <div className="flex items-center mb-2">
+                  <svg className="w-4 h-4 text-yellow-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                  </svg>
+                  <span className="text-sm font-medium text-yellow-700">Feedback</span>
+                </div>
+              )}
               <p className="text-sm whitespace-pre-wrap">{message.content}</p>
             </div>
           </div>
         ))}
+
+        {isLoadingFeedback && (
+          <div className="flex justify-start">
+            <div className="bg-yellow-50 border border-yellow-200 shadow-sm px-4 py-2 rounded-lg max-w-xs md:max-w-md lg:max-w-lg">
+              <div className="flex items-center">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-600 mr-2"></div>
+                <span className="text-sm text-gray-600">
+                  {currentQuestionIndex + 1 >= questions.length && !showingFeedback 
+                    ? "Generating overall interview feedback..." 
+                    : "Generating feedback..."}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {isComplete && (
           <div className="text-center py-8">
@@ -214,8 +324,22 @@ export function InterviewChat({ job, onBack }: InterviewChatProps) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Interview Complete!</h3>
-            <p className="text-gray-600 mb-4">You've answered all the questions. Great job!</p>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Interview Complete!</h3>
+            
+            {overallFeedback && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6 text-left max-w-4xl mx-auto">
+                <div className="flex items-center mb-3">
+                  <svg className="w-5 h-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <h4 className="text-lg font-semibold text-blue-800">Overall Interview Feedback</h4>
+                </div>
+                <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                  {overallFeedback}
+                </div>
+              </div>
+            )}
+
             <button
               onClick={onBack}
               className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700"
@@ -228,30 +352,42 @@ export function InterviewChat({ job, onBack }: InterviewChatProps) {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input area */}
+      {/* Input area or Next button */}
       {!isComplete && (
         <div className="bg-white border-t p-4">
-          <div className="flex items-end space-x-2">
-            <div className="flex-1">
-              <textarea
-                value={userResponse}
-                onChange={(e) => setUserResponse(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="Type your answer here..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                rows={3}
-              />
+          {showingFeedback && !isLoadingFeedback ? (
+            <div className="flex justify-center">
+              <button
+                onClick={handleNextQuestion}
+                className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-colors"
+              >
+                {currentQuestionIndex + 1 < questions.length ? 'Next Question' : 'Finish Interview'}
+              </button>
             </div>
-            <button
-              onClick={handleSubmitResponse}
-              disabled={!userResponse.trim()}
-              className="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-              </svg>
-            </button>
-          </div>
+          ) : !showingFeedback && !isLoadingFeedback ? (
+            <div className="flex items-end space-x-2">
+              <div className="flex-1">
+                <textarea
+                  value={userResponse}
+                  onChange={(e) => setUserResponse(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  placeholder="Type your answer here..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  rows={3}
+                  disabled={isLoadingFeedback}
+                />
+              </div>
+              <button
+                onClick={handleSubmitResponse}
+                disabled={!userResponse.trim() || isLoadingFeedback}
+                className="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+              </button>
+            </div>
+          ) : null}
         </div>
       )}
     </div>

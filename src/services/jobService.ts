@@ -1,4 +1,4 @@
-import type { Job, InterviewRequest, InterviewResponse } from '../types/job';
+import type { Job, InterviewRequest, InterviewResponse, FeedbackRequest, FeedbackResponse } from '../types/job';
 import { API_CONFIG, buildApiUrl } from '../config/api';
 
 export interface JobSearchParams {
@@ -71,6 +71,31 @@ export const jobService = {
       }
     } catch (error) {
       console.error('Error fetching interview questions:', error);
+      throw error;
+    }
+  },
+
+  async getFeedback(feedbackRequest: FeedbackRequest): Promise<FeedbackResponse> {
+    try {
+      const response = await fetch(buildApiUrl(API_CONFIG.ENDPOINTS.FEEDBACK), {
+        method: 'POST',
+        headers: API_CONFIG.DEFAULT_HEADERS,
+        body: JSON.stringify(feedbackRequest),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.success && data.feedback) {
+        return data as FeedbackResponse;
+      } else {
+        throw new Error('Invalid response format');
+      }
+    } catch (error) {
+      console.error('Error fetching feedback:', error);
       throw error;
     }
   }

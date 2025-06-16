@@ -6,6 +6,7 @@ export const API_CONFIG = {
   ENDPOINTS: {
     JOBS: '/jobs',
     QUESTIONS: '/questions',
+    FEEDBACK: '/feedback',
     // Add other endpoints here as you create them
     // INTERVIEWS: '/interviews',
     // USER_PROFILE: '/user/profile',

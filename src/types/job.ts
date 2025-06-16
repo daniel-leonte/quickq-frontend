@@ -27,8 +27,29 @@ export interface InterviewResponse {
   total: number;
 }
 
+// Feedback types
+export interface QuestionAnswer {
+  question: string;
+  answer: string;
+}
+
+export interface FeedbackRequest {
+  job: {
+    title: string;
+    description: string;
+    skills: string[];
+  };
+  questions: QuestionAnswer[];
+}
+
+export interface FeedbackResponse {
+  feedback: string;
+  job_title: string;
+  success: boolean;
+}
+
 export interface ChatMessage {
   id: string;
   content: string;
-  type: 'question' | 'answer';
+  type: 'question' | 'answer' | 'feedback';
 } 
